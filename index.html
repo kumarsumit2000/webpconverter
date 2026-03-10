@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WebP Converter — Bulk Image to WebP</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d0d14;
+      --surface: #16161f;
+      --surface2: #1e1e2e;
+      --border: #2a2a3d;
+      --accent: #7c3aed;
+      --accent2: #6d28d9;
+      --accent-glow: rgba(124, 58, 237, 0.35);
+      --green: #22c55e;
+      --red: #ef4444;
+      --yellow: #f59e0b;
+      --text: #e2e8f0;
+      --text2: #94a3b8;
+      --text3: #64748b;
+      --radius: 12px;
+      --radius-sm: 8px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+
+    /* ─── Header ─── */
+    header {
+      text-align: center;
+      padding: 52px 24px 36px;
+      position: relative;
+    }
+    header::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse 60% 50% at 50% 0%, rgba(124,58,237,.18) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .logo-icon {
+      width: 44px; height: 44px;
+      background: linear-gradient(135deg, #7c3aed, #4f46e5);
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px;
+      box-shadow: 0 0 24px var(--accent-glow);
+    }
+    h1 {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 800;
+      background: linear-gradient(120deg, #c4b5fd, #818cf8, #7c3aed);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: -0.03em;
+    }
+    .subtitle {
+      color: var(--text2);
+      font-size: .95rem;
+      margin-top: 8px;
+    }
+    .badges {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 16px;
+    }
+    .badge {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text2);
+      font-size: .75rem;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 20px;
+      letter-spacing: .02em;
+      text-transform: uppercase;
+    }
+
+    /* ─── Main Layout ─── */
+    main { max-width: 960px; margin: 0 auto; padding: 0 20px 80px; }
+
+    /* ─── Drop Zone ─── */
+    .drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 48px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .2s, background .2s, box-shadow .2s;
+      background: var(--surface);
+      position: relative;
+      overflow: hidden;
+    }
+    .drop-zone::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse 50% 60% at 50% 100%, var(--accent-glow), transparent 70%);
+      opacity: 0;
+      transition: opacity .3s;
+    }
+    .drop-zone:hover, .drop-zone.dragging {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 4px var(--accent-glow);
+    }
+    .drop-zone:hover::before, .drop-zone.dragging::before { opacity: 1; }
+    .drop-zone.dragging { background: #1a1428; }
+    .drop-icon {
+      font-size: 3rem;
+      margin-bottom: 16px;
+      display: block;
+      line-height: 1;
+      filter: drop-shadow(0 0 12px var(--accent-glow));
+    }
+    .drop-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+    .drop-sub {
+      color: var(--text2);
+      font-size: .88rem;
+      margin-bottom: 20px;
+    }
+    .btn-pick {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: linear-gradient(135deg, var(--accent), #4f46e5);
+      color: #fff;
+      font-size: .9rem;
+      font-weight: 600;
+      padding: 10px 22px;
+      border-radius: var(--radius-sm);
+      border: none;
+      cursor: pointer;
+      transition: opacity .2s, transform .15s, box-shadow .2s;
+      box-shadow: 0 4px 20px var(--accent-glow);
+      position: relative;
+    }
+    .btn-pick:hover { opacity: .9; transform: translateY(-1px); box-shadow: 0 6px 28px var(--accent-glow); }
+    .btn-pick:active { transform: translateY(0); }
+    #file-input { display: none; }
+    .drop-formats {
+      margin-top: 14px;
+      font-size: .78rem;
+      color: var(--text3);
+    }
+
+    /* ─── Controls Panel ─── */
+    .controls {
+      margin-top: 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 24px;
+      align-items: center;
+    }
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex: 1;
+      min-width: 180px;
+    }
+    .control-label {
+      font-size: .82rem;
+      font-weight: 600;
+      color: var(--text2);
+      letter-spacing: .03em;
+      text-transform: uppercase;
+    }
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .toggle {
+      position: relative;
+      width: 44px; height: 24px;
+      flex-shrink: 0;
+    }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute;
+      inset: 0;
+      background: var(--border);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    .toggle-slider::before {
+      content: '';
+      position: absolute;
+      width: 18px; height: 18px;
+      left: 3px; top: 3px;
+      background: #fff;
+      border-radius: 50%;
+      transition: transform .2s;
+    }
+    .toggle input:checked + .toggle-slider { background: var(--accent); }
+    .toggle input:checked + .toggle-slider::before { transform: translateX(20px); }
+    .toggle-text {
+      font-size: .9rem;
+      color: var(--text);
+    }
+    .quality-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    input[type=range] {
+      -webkit-appearance: none;
+      flex: 1;
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      outline: none;
+      cursor: pointer;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 18px; height: 18px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent-glow);
+      cursor: pointer;
+    }
+    input[type=range]:disabled { opacity: .35; cursor: not-allowed; }
+    .quality-val {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--accent);
+      min-width: 44px;
+      text-align: right;
+    }
+    .quality-note {
+      font-size: .78rem;
+      color: var(--text3);
+      margin-top: 2px;
+    }
+    .control-divider {
+      width: 1px;
+      height: 60px;
+      background: var(--border);
+      flex-shrink: 0;
+    }
+
+    /* ─── Toolbar ─── */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 28px;
+    }
+    .toolbar-left { display: flex; align-items: center; gap: 10px; }
+    .results-count {
+      font-size: .9rem;
+      color: var(--text2);
+    }
+    .results-count span { color: var(--text); font-weight: 700; }
+    .toolbar-right { display: flex; gap: 10px; flex-wrap: wrap; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-size: .85rem;
+      font-weight: 600;
+      padding: 9px 16px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: background .2s, border-color .2s, transform .15s;
+      background: var(--surface2);
+      color: var(--text);
+      white-space: nowrap;
+    }
+    .btn:hover { background: #252538; transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
+    .btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), #4f46e5);
+      border-color: transparent;
+      color: #fff;
+      box-shadow: 0 2px 12px var(--accent-glow);
+    }
+    .btn-primary:hover { opacity: .9; background: linear-gradient(135deg, var(--accent), #4f46e5); }
+    .btn-danger { border-color: #3d1f1f; color: var(--red); }
+    .btn-danger:hover { background: #1f1010; border-color: var(--red); }
+    .btn-green { border-color: #1a3d28; color: var(--green); }
+    .btn-green:hover { background: #0f1f15; border-color: var(--green); }
+
+    /* ─── Image Grid ─── */
+    #image-grid {
+      margin-top: 20px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
+    }
+
+    /* ─── Image Card ─── */
+    .img-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transition: transform .2s, box-shadow .2s, border-color .2s;
+      animation: fadeSlideIn .3s ease both;
+    }
+    @keyframes fadeSlideIn {
+      from { opacity: 0; transform: translateY(12px) scale(.97); }
+      to   { opacity: 1; transform: none; }
+    }
+    .img-card:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,.4); border-color: #3a3a55; }
+    .img-card.error { border-color: #3d1f1f; }
+    .img-card.done { border-color: #1a3d28; }
+
+    .card-preview {
+      height: 160px;
+      background: #111118;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+      flex-shrink: 0;
+    }
+    .card-preview img {
+      width: 100%; height: 100%;
+      object-fit: contain;
+      padding: 8px;
+    }
+    .card-preview .preview-placeholder {
+      font-size: 2.5rem;
+      opacity: .3;
+    }
+
+    .card-status-badge {
+      position: absolute;
+      top: 8px; right: 8px;
+      font-size: .7rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 20px;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+    .badge-converting { background: rgba(245,158,11,.15); color: var(--yellow); border: 1px solid rgba(245,158,11,.3); }
+    .badge-done { background: rgba(34,197,94,.15); color: var(--green); border: 1px solid rgba(34,197,94,.3); }
+    .badge-error { background: rgba(239,68,68,.15); color: var(--red); border: 1px solid rgba(239,68,68,.3); }
+    .badge-queued { background: rgba(148,163,184,.1); color: var(--text3); border: 1px solid var(--border); }
+
+    .card-body {
+      padding: 14px 16px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .card-name {
+      font-size: .88rem;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .card-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .meta-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: .8rem;
+    }
+    .meta-label { color: var(--text3); }
+    .meta-val { color: var(--text2); font-weight: 500; }
+    .meta-val.green { color: var(--green); }
+    .meta-val.yellow { color: var(--yellow); }
+
+    .savings-bar {
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .savings-fill {
+      height: 100%;
+      border-radius: 2px;
+      background: linear-gradient(90deg, var(--green), #16a34a);
+      transition: width .6s ease;
+    }
+
+    .card-error-msg {
+      font-size: .8rem;
+      color: var(--red);
+      background: rgba(239,68,68,.08);
+      border: 1px solid rgba(239,68,68,.2);
+      border-radius: 6px;
+      padding: 8px 10px;
+    }
+
+    .card-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: auto;
+    }
+    .card-actions .btn {
+      flex: 1;
+      justify-content: center;
+      font-size: .8rem;
+      padding: 8px 10px;
+    }
+
+    /* ─── Progress spinner ─── */
+    .spinner {
+      width: 32px; height: 32px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ─── Empty State ─── */
+    #empty-state {
+      display: none;
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--text3);
+      font-size: .9rem;
+    }
+
+    /* ─── Global Progress ─── */
+    #global-progress {
+      display: none;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      margin-top: 20px;
+    }
+    .prog-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: .85rem;
+      color: var(--text2);
+      margin-bottom: 8px;
+    }
+    .prog-bar {
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .prog-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), #4f46e5);
+      border-radius: 3px;
+      transition: width .3s ease;
+    }
+
+    /* ─── Toast ─── */
+    #toast {
+      position: fixed;
+      bottom: 24px; left: 50%;
+      transform: translateX(-50%) translateY(12px);
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-size: .88rem;
+      font-weight: 500;
+      padding: 12px 20px;
+      border-radius: var(--radius-sm);
+      box-shadow: 0 8px 32px rgba(0,0,0,.5);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .25s, transform .25s;
+      z-index: 1000;
+      white-space: nowrap;
+      max-width: 90vw;
+    }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* ─── Info note ─── */
+    .info-note {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      background: rgba(99,102,241,.08);
+      border: 1px solid rgba(99,102,241,.2);
+      border-radius: var(--radius-sm);
+      padding: 12px 16px;
+      font-size: .82rem;
+      color: var(--text2);
+      margin-top: 20px;
+    }
+    .info-note-icon { font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
+
+    /* ─── Footer ─── */
+    footer {
+      text-align: center;
+      padding: 24px;
+      color: var(--text3);
+      font-size: .8rem;
+      border-top: 1px solid var(--border);
+      margin-top: 40px;
+    }
+
+    /* ─── Responsive ─── */
+    @media (max-width: 600px) {
+      .controls { gap: 16px; }
+      .control-divider { display: none; }
+      .toolbar { flex-direction: column; align-items: stretch; }
+      .toolbar-right { justify-content: stretch; }
+      .toolbar-right .btn { flex: 1; justify-content: center; }
+      #image-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">🖼️</div>
+    <h1>WebP Converter</h1>
+  </div>
+  <p class="subtitle">Convert any image to WebP — bulk, fast, and entirely in your browser. No uploads. No servers.</p>
+  <div class="badges">
+    <span class="badge">🔒 100% Private</span>
+    <span class="badge">⚡ Client-Side</span>
+    <span class="badge">📦 Bulk ZIP Export</span>
+    <span class="badge">🎛️ Quality Control</span>
+  </div>
+</header>
+
+<main>
+
+  <!-- Drop Zone -->
+  <div class="drop-zone" id="drop-zone">
+    <span class="drop-icon">🗂️</span>
+    <div class="drop-title">Drop images here</div>
+    <p class="drop-sub">or click to browse your files</p>
+    <button class="btn-pick" onclick="document.getElementById('file-input').click()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Choose Images
+    </button>
+    <p class="drop-formats">Supports: JPEG · PNG · GIF · BMP · SVG · AVIF · TIFF · ICO · WebP</p>
+    <input type="file" id="file-input" multiple accept="image/*" />
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <div class="control-group">
+      <div class="control-label">Encoding Mode</div>
+      <div class="toggle-row">
+        <label class="toggle">
+          <input type="checkbox" id="lossless-toggle" />
+          <span class="toggle-slider"></span>
+        </label>
+        <span class="toggle-text" id="lossless-label">Lossy (Quality Slider)</span>
+      </div>
+      <div class="quality-note" id="lossless-note">Adjust quality below — lower = smaller file size</div>
+    </div>
+
+    <div class="control-divider"></div>
+
+    <div class="control-group">
+      <div class="control-label">Quality <span id="quality-label-extra" style="color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0">(disabled in lossless mode)</span></div>
+      <div class="quality-row">
+        <input type="range" id="quality-slider" min="1" max="100" value="90" />
+        <div class="quality-val" id="quality-val">90%</div>
+      </div>
+      <div class="quality-note" id="quality-hint">Higher = better quality, larger file</div>
+    </div>
+
+    <div class="control-divider"></div>
+
+    <div class="control-group" style="min-width:140px;max-width:180px">
+      <div class="control-label">Auto Convert</div>
+      <div class="toggle-row">
+        <label class="toggle">
+          <input type="checkbox" id="auto-convert" checked />
+          <span class="toggle-slider"></span>
+        </label>
+        <span class="toggle-text">Convert on drop</span>
+      </div>
+      <div class="quality-note">Start converting immediately</div>
+    </div>
+  </div>
+
+  <!-- Info note -->
+  <div class="info-note">
+    <span class="info-note-icon">ℹ️</span>
+    <span><strong>Lossless mode</strong> preserves every pixel perfectly — file sizes may be larger than lossy. <strong>Quality 90–100%</strong> is visually identical to the original for most photos. All processing happens <strong>in your browser</strong> — your images never leave your device.</span>
+  </div>
+
+  <!-- Global Progress -->
+  <div id="global-progress">
+    <div class="prog-label">
+      <span id="prog-text">Converting…</span>
+      <span id="prog-pct">0%</span>
+    </div>
+    <div class="prog-bar">
+      <div class="prog-fill" id="prog-fill" style="width:0%"></div>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar" id="toolbar" style="display:none">
+    <div class="toolbar-left">
+      <div class="results-count" id="results-count"></div>
+    </div>
+    <div class="toolbar-right">
+      <button class="btn" id="btn-convert-all" onclick="convertAll()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
+        Re-Convert All
+      </button>
+      <button class="btn btn-green" id="btn-download-all" onclick="downloadAll()" disabled>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download All ZIP
+      </button>
+      <button class="btn btn-danger" onclick="clearAll()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+        Clear All
+      </button>
+    </div>
+  </div>
+
+  <!-- Image Grid -->
+  <div id="image-grid"></div>
+  <div id="empty-state">No images added yet — drop some above!</div>
+
+</main>
+
+<footer>
+  WebP Converter · All processing is local · No data leaves your browser
+</footer>
+
+<div id="toast"></div>
+
+<script>
+  // ── State ──────────────────────────────────────────────────────────────────
+  const items = new Map(); // id → { file, blob, status, originalSize, webpSize }
+  let idCounter = 0;
+
+  // ── DOM Refs ───────────────────────────────────────────────────────────────
+  const dropZone        = document.getElementById('drop-zone');
+  const fileInput       = document.getElementById('file-input');
+  const qualitySlider   = document.getElementById('quality-slider');
+  const qualityVal      = document.getElementById('quality-val');
+  const qualityHint     = document.getElementById('quality-hint');
+  const losslessToggle  = document.getElementById('lossless-toggle');
+  const losslessLabel   = document.getElementById('lossless-label');
+  const losslessNote    = document.getElementById('lossless-note');
+  const qualityLabelEx  = document.getElementById('quality-label-extra');
+  const autoConvert     = document.getElementById('auto-convert');
+  const toolbar         = document.getElementById('toolbar');
+  const grid            = document.getElementById('image-grid');
+  const emptyState      = document.getElementById('empty-state');
+  const resultsCount    = document.getElementById('results-count');
+  const btnDownloadAll  = document.getElementById('btn-download-all');
+  const globalProgress  = document.getElementById('global-progress');
+  const progFill        = document.getElementById('prog-fill');
+  const progText        = document.getElementById('prog-text');
+  const progPct         = document.getElementById('prog-pct');
+
+  // ── Quality Slider ─────────────────────────────────────────────────────────
+  qualitySlider.addEventListener('input', () => {
+    const v = parseInt(qualitySlider.value);
+    qualityVal.textContent = v + '%';
+    const h = v >= 90 ? '⭐ Excellent — near-lossless'
+            : v >= 75 ? '✅ Great — recommended for photos'
+            : v >= 50 ? '⚠️ Good — moderate compression'
+            :            '🔴 Low — high compression, visible loss';
+    qualityHint.textContent = h;
+  });
+
+  losslessToggle.addEventListener('change', () => {
+    const on = losslessToggle.checked;
+    qualitySlider.disabled = on;
+    losslessLabel.textContent = on ? 'Lossless (Max Quality)' : 'Lossy (Quality Slider)';
+    losslessNote.textContent  = on
+      ? 'Pixel-perfect — zero quality loss, larger file size'
+      : 'Adjust quality below — lower = smaller file size';
+    qualityLabelEx.textContent = on ? '(disabled in lossless mode)' : '';
+    qualityVal.style.opacity = on ? '0.35' : '1';
+  });
+
+  // ── Drag & Drop ────────────────────────────────────────────────────────────
+  dropZone.addEventListener('click', (e) => {
+    if (!e.target.closest('.btn-pick')) fileInput.click();
+  });
+
+  dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.classList.add('dragging');
+  });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragging'));
+  dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('dragging');
+    const files = [...e.dataTransfer.files].filter(f => f.type.startsWith('image/'));
+    if (files.length) addFiles(files);
+    else toast('⚠️ No image files found in drop');
+  });
+
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files.length) addFiles([...fileInput.files]);
+    fileInput.value = '';
+  });
+
+  // ── Add Files ──────────────────────────────────────────────────────────────
+  function addFiles(files) {
+    const newIds = [];
+    for (const f of files) {
+      const id = ++idCounter;
+      items.set(id, { file: f, blob: null, status: 'queued', originalSize: f.size, webpSize: null });
+      createCard(id, f);
+      newIds.push(id);
+    }
+    updateUI();
+    if (autoConvert.checked) convertItems(newIds);
+  }
+
+  // ── Create Card ────────────────────────────────────────────────────────────
+  function createCard(id, file) {
+    const el = document.createElement('div');
+    el.className = 'img-card';
+    el.id = 'card-' + id;
+
+    const previewUrl = URL.createObjectURL(file);
+
+    el.innerHTML = `
+      <div class="card-preview">
+        <img src="${previewUrl}" alt="" onload="URL.revokeObjectURL(this.src)" loading="lazy" />
+        <span class="card-status-badge badge-queued" id="badge-${id}">Queued</span>
+      </div>
+      <div class="card-body">
+        <div class="card-name" title="${escHtml(file.name)}">${escHtml(trimName(file.name))}</div>
+        <div class="card-meta" id="meta-${id}">
+          <div class="meta-row">
+            <span class="meta-label">Original</span>
+            <span class="meta-val">${fmtSize(file.size)} · ${file.type.split('/')[1]?.toUpperCase() || 'IMG'}</span>
+          </div>
+          <div class="meta-row">
+            <span class="meta-label">WebP size</span>
+            <span class="meta-val" id="webp-size-${id}">—</span>
+          </div>
+          <div class="meta-row">
+            <span class="meta-label">Savings</span>
+            <span class="meta-val" id="savings-${id}">—</span>
+          </div>
+          <div class="savings-bar"><div class="savings-fill" id="savings-bar-${id}" style="width:0%"></div></div>
+        </div>
+        <div id="error-${id}" style="display:none"></div>
+        <div class="card-actions">
+          <button class="btn" onclick="convertItems([${id}])" id="btn-reconv-${id}">
+            🔄 Convert
+          </button>
+          <button class="btn btn-green" onclick="downloadSingle(${id})" id="btn-dl-${id}" disabled>
+            ⬇️ Download
+          </button>
+        </div>
+      </div>`;
+
+    grid.appendChild(el);
+  }
+
+  // ── Convert Items ──────────────────────────────────────────────────────────
+  async function convertItems(ids) {
+    const total = ids.length;
+    let done = 0;
+
+    if (total > 1) {
+      globalProgress.style.display = 'block';
+      setProgress(0, total);
+    }
+
+    // Batch with concurrency limit 4
+    const CONCURRENCY = 4;
+    const queue = [...ids];
+    const running = new Set();
+
+    const runNext = async () => {
+      while (queue.length > 0 && running.size < CONCURRENCY) {
+        const id = queue.shift();
+        const p = convertOne(id).then(() => {
+          done++;
+          running.delete(p);
+          if (total > 1) setProgress(done, total);
+          runNext();
+        });
+        running.add(p);
+      }
+    };
+
+    await runNext();
+    await new Promise(resolve => {
+      const wait = setInterval(() => {
+        if (running.size === 0) { clearInterval(wait); resolve(); }
+      }, 50);
+    });
+
+    if (total > 1) {
+      setProgress(total, total);
+      setTimeout(() => {
+        globalProgress.style.display = 'none';
+        progFill.style.width = '0%';
+      }, 1200);
+    }
+
+    updateUI();
+    if (ids.length > 1) toast(`✅ Converted ${total} image${total > 1 ? 's' : ''}`);
+  }
+
+  async function convertOne(id) {
+    const item = items.get(id);
+    if (!item) return;
+
+    setCardStatus(id, 'converting');
+
+    try {
+      const lossless = losslessToggle.checked;
+      const quality  = parseInt(qualitySlider.value) / 100;
+      const blob     = await fileToWebP(item.file, lossless ? 1.0 : quality, lossless);
+
+      item.blob      = blob;
+      item.webpSize  = blob.size;
+      item.status    = 'done';
+
+      setCardStatus(id, 'done');
+      updateCardMeta(id);
+    } catch (err) {
+      item.status = 'error';
+      item.errorMsg = err.message || 'Conversion failed';
+      setCardStatus(id, 'error', item.errorMsg);
+    }
+  }
+
+  // ── Core Conversion ────────────────────────────────────────────────────────
+  function fileToWebP(file, quality, lossless) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width  = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          const ctx = canvas.getContext('2d');
+
+          // Paint a white background for JPEG-like sources that may not handle alpha
+          // For PNG / WebP with transparency we skip this to preserve alpha
+          const isTransparent = (file.type === 'image/png' || file.type === 'image/webp' ||
+                                  file.type === 'image/gif' || file.type === 'image/avif');
+          if (!isTransparent) {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+          }
+
+          ctx.drawImage(img, 0, 0);
+
+          canvas.toBlob((blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error('Browser could not encode to WebP'));
+          }, 'image/webp', quality);
+
+        } catch (e) { reject(e); }
+      };
+
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error('Could not load image — format may not be supported by your browser'));
+      };
+
+      img.src = url;
+    });
+  }
+
+  // ── Card Status ────────────────────────────────────────────────────────────
+  function setCardStatus(id, status, errMsg) {
+    const card    = document.getElementById('card-' + id);
+    const badge   = document.getElementById('badge-' + id);
+    const errEl   = document.getElementById('error-' + id);
+    const btnDl   = document.getElementById('btn-dl-' + id);
+    const btnReconv = document.getElementById('btn-reconv-' + id);
+
+    // Remove previous status classes
+    card.classList.remove('error', 'done');
+
+    if (status === 'converting') {
+      badge.className = 'card-status-badge badge-converting';
+      badge.textContent = 'Converting…';
+      // Show spinner in preview
+      const preview = card.querySelector('.card-preview');
+      let spinner = preview.querySelector('.spinner');
+      if (!spinner) {
+        spinner = document.createElement('div');
+        spinner.className = 'spinner';
+        spinner.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:2';
+        preview.appendChild(spinner);
+      }
+    } else {
+      const spinner = card.querySelector('.spinner');
+      if (spinner) spinner.remove();
+    }
+
+    if (status === 'done') {
+      badge.className = 'card-status-badge badge-done';
+      badge.textContent = 'Done ✓';
+      card.classList.add('done');
+      btnDl.disabled = false;
+    }
+    if (status === 'error') {
+      badge.className = 'card-status-badge badge-error';
+      badge.textContent = 'Error';
+      card.classList.add('error');
+      errEl.style.display = 'block';
+      errEl.innerHTML = `<div class="card-error-msg">⚠️ ${escHtml(errMsg)}</div>`;
+    }
+    if (status === 'queued') {
+      badge.className = 'card-status-badge badge-queued';
+      badge.textContent = 'Queued';
+    }
+  }
+
+  function updateCardMeta(id) {
+    const item    = items.get(id);
+    if (!item || !item.blob) return;
+
+    const webpSizeEl  = document.getElementById('webp-size-' + id);
+    const savingsEl   = document.getElementById('savings-' + id);
+    const savingsBar  = document.getElementById('savings-bar-' + id);
+
+    webpSizeEl.textContent = fmtSize(item.webpSize);
+
+    const saved = item.originalSize - item.webpSize;
+    const pct   = (saved / item.originalSize) * 100;
+
+    if (saved > 0) {
+      savingsEl.textContent = `−${fmtSize(saved)} (${pct.toFixed(1)}% smaller)`;
+      savingsEl.className   = 'meta-val green';
+      savingsBar.style.width = Math.min(pct, 100) + '%';
+    } else {
+      const growth = Math.abs(pct).toFixed(1);
+      savingsEl.textContent = `+${fmtSize(Math.abs(saved))} (${growth}% larger)`;
+      savingsEl.className   = 'meta-val yellow';
+      savingsBar.style.background = '#f59e0b';
+      savingsBar.style.width = Math.min(Math.abs(pct), 100) + '%';
+    }
+  }
+
+  // ── Download Single ────────────────────────────────────────────────────────
+  function downloadSingle(id) {
+    const item = items.get(id);
+    if (!item || !item.blob) return;
+    const name = item.file.name.replace(/\.[^.]+$/, '') + '.webp';
+    triggerDownload(item.blob, name);
+    toast(`⬇️ Downloaded ${name}`);
+  }
+
+  // ── Download All ZIP ───────────────────────────────────────────────────────
+  async function downloadAll() {
+    const done = [...items.values()].filter(i => i.status === 'done');
+    if (!done.length) { toast('⚠️ No converted images to download'); return; }
+
+    btnDownloadAll.disabled = true;
+    btnDownloadAll.textContent = '⏳ Zipping…';
+
+    const zip = new JSZip();
+    for (const [id, item] of items) {
+      if (item.status !== 'done') continue;
+      const name = item.file.name.replace(/\.[^.]+$/, '') + '.webp';
+      zip.file(name, item.blob);
+    }
+
+    const zipBlob = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
+    triggerDownload(zipBlob, 'webp-converted.zip');
+    toast(`📦 Downloaded ZIP with ${done.length} images`);
+
+    btnDownloadAll.disabled = false;
+    btnDownloadAll.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Download All ZIP`;
+  }
+
+  // ── Convert All ────────────────────────────────────────────────────────────
+  function convertAll() {
+    const ids = [...items.keys()];
+    if (!ids.length) return;
+    convertItems(ids);
+  }
+
+  // ── Clear All ──────────────────────────────────────────────────────────────
+  function clearAll() {
+    items.clear();
+    grid.innerHTML = '';
+    updateUI();
+    toast('🗑️ Cleared all images');
+  }
+
+  // ── Progress ───────────────────────────────────────────────────────────────
+  function setProgress(done, total) {
+    const pct = Math.round((done / total) * 100);
+    progFill.style.width = pct + '%';
+    progPct.textContent  = pct + '%';
+    progText.textContent = done < total
+      ? `Converting ${done + 1} of ${total}…`
+      : `Conversion complete!`;
+  }
+
+  // ── UI State ───────────────────────────────────────────────────────────────
+  function updateUI() {
+    const count = items.size;
+    const done  = [...items.values()].filter(i => i.status === 'done').length;
+
+    toolbar.style.display = count > 0 ? 'flex' : 'none';
+    emptyState.style.display = count === 0 ? 'block' : 'none';
+
+    resultsCount.innerHTML = `<span>${count}</span> image${count !== 1 ? 's' : ''} · <span>${done}</span> converted`;
+    btnDownloadAll.disabled = done === 0;
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  function fmtSize(bytes) {
+    if (bytes < 1024)       return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+  }
+
+  function trimName(name) {
+    return name.length > 32 ? name.substring(0, 28) + '…' + name.split('.').pop() : name;
+  }
+
+  function escHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function triggerDownload(blob, filename) {
+    const a   = document.createElement('a');
+    a.href     = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  }
+
+  let toastTimer;
+  function toast(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+  }
+
+  // ── Browser WebP Check ─────────────────────────────────────────────────────
+  (function checkWebPSupport() {
+    const c = document.createElement('canvas');
+    c.width = c.height = 1;
+    if (c.toDataURL('image/webp').indexOf('data:image/webp') !== 0) {
+      toast('⚠️ Your browser may not support WebP encoding. Use Chrome or Edge for best results.');
+    }
+  })();
+
+  // Init
+  updateUI();
+</script>
+</body>
+</html>
